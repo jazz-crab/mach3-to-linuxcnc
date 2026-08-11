@@ -4,10 +4,11 @@
 # LinuxCNC box, "as after a fresh install".
 #
 # Run from a USB stick (data USB, not bootable):
-#     sudo bash setup-machine.sh [--yes] [--reboot] [--dry-run] [--skip-clean]
+#     sudo bash setup-machine.sh
 #
-# Flags:
-#   --yes         no interactive confirmations (destructive steps)
+# The script asks questions interactively before doing anything.
+# Flags (optional, override the interactive answers):
+#   --yes         answer "yes" to everything, no prompts
 #   --reboot      reboot at the end (after installing the RT kernel)
 #   --dry-run     print what would be done, change nothing
 #   --skip-clean  do not purge other DEs / other users / old configs
@@ -20,7 +21,7 @@
 set -euo pipefail
 
 LOG=/var/log/linuxcnc-setup.log
-DO_REBOOT=0
+FLAG_REBOOT=0
 ASSUME_YES=0
 SKIP_CLEAN=0
 DRY_RUN=0
@@ -29,7 +30,7 @@ DRY_RUN=0
 for a in "$@"; do
   case "$a" in
     --yes) ASSUME_YES=1 ;;
-    --reboot) DO_REBOOT=1 ;;
+    --reboot) FLAG_REBOOT=1 ;;
     --skip-clean) SKIP_CLEAN=1 ;;
     --dry-run) DRY_RUN=1 ;;
     *) echo "unknown flag: $a"; exit 2 ;;
@@ -45,15 +46,23 @@ run() {
   "$@" >>"$LOG" 2>&1 || { log "FAILED: $*"; return 1; }
 }
 
-confirm() { # confirm "question" -> yes/no
-  [ "$ASSUME_YES" = 1 ] && return 0
-  local ans
-  printf "%s [y/N] " "$1" >&2
-  read -r ans </dev/tty
-  [[ "$ans" =~ ^[yY] ]]
-}
-
 installed() { dpkg -s "$1" >/dev/null 2>&1; }
+
+# ask <question> <default: y|n>  ->  exit 0 = yes, 1 = no
+ask() {
+  [ "$ASSUME_YES" = 1 ] && return 0
+  local q="$1" default="$2" ans yn
+  while true; do
+    if [ "$default" = "y" ]; then yn="[Y/n]"; else yn="[y/N]"; fi
+    printf "%s %s " "$q" "$yn"
+    read -r ans </dev/tty || return 1
+    [ -z "$ans" ] && ans="$default"
+    case "$ans" in
+      y|Y|yes|YES) return 0 ;;
+      n|N|no|NO)   return 1 ;;
+    esac
+  done
+}
 
 # ---------------------------------------------------------------- preflight
 [ "$(id -u)" = 0 ] || die "run me as root: sudo bash $(basename "$0")"
@@ -68,24 +77,72 @@ DOTFILES="$SCRIPT_DIR/dotfiles"
 [ -d "$DEBS" ] || die "no debs/ next to this script (run fetch-packages.py first)"
 [ -d "$DOTFILES" ] || warn "no dotfiles/ found — desktop keybinds/autostart will not be installed"
 
-log "== linuxcnc setup, USB at $SCRIPT_DIR, debs: $(ls "$DEBS"/*.deb 2>/dev/null | wc -l)"
+# ------------------------------------------------------------- interactive
+echo ""
+echo "  Настройка станка: Debian Trixie -> LinuxCNC"
+echo "  ============================================"
+echo "  Будут установлены: LinuxCNC, RT-ядро, openbox, lightdm, alacritty,"
+echo "  thunar (ПКМ-меню), neovim; создан пользователь cnc / cnc."
+echo "  Интернет не нужен — пакеты берутся из папки debs/ на этой флешке."
+echo "  Лог установки: $LOG"
+echo ""
 
+CLEAN=0
+RT_DEFAULT=0
+REBOOT_AFTER=0
+
+if [ "$SKIP_CLEAN" = 1 ]; then
+  CLEAN=0
+else
+  echo "  >>> Шаг 1/3 — ОЧИСТКА СИСТЕМЫ"
+  echo "  ВНИМАНИЕ! Это удалит данные, оставшиеся от прежних владельцев:"
+  echo "   - другие пользователи и их /home (кроме будущего пользователя cnc)"
+  echo "   - сторонние рабочие столы (GNOME/KDE/Xfce/Mate/Cinnamon) и приложения"
+  echo "   - настройки /etc/skel"
+  echo "  Система станет практически «как после установки»."
+  echo ""
+  if ask "Очистить систему (данные будут потеряны)?" "y"; then
+    CLEAN=1
+  fi
+fi
+
+if ask "Сделать RT-ядро загрузочным по умолчанию?" "y"; then
+  RT_DEFAULT=1
+fi
+# reboot question: needs an installed RT kernel to be useful
+if [ "$FLAG_REBOOT" = 1 ]; then
+  REBOOT_AFTER=1
+elif ask "Перезагрузиться в конце установки (войти в RT-ядро)?" "y"; then
+  REBOOT_AFTER=1
+fi
+
+echo ""
+echo "  ИТОГ (можно поменять: флаги --skip-clean, --reboot, --yes, --dry-run):"
+echo "   - очистка системы:           $([ "$CLEAN" = 1 ] && echo ДА || echo нет)"
+echo "   - RT-ядро по умолчанию:      $([ "$RT_DEFAULT" = 1 ] && echo ДА || echo нет)"
+echo "   - перезагрузка в конце:      $([ "$REBOOT_AFTER" = 1 ] && echo ДА || echo нет)"
+if ask "Всё верно, начинаем?" "y"; then
+  :
+else
+  echo "Отменено."
+  exit 1
+fi
+
+log "== linuxcnc setup, USB at $SCRIPT_DIR, debs: $(ls "$DEBS"/*.deb 2>/dev/null | wc -l)"
 free_mb=$(df -Pm / | awk 'NR==2{print $4}')
 [ "$free_mb" -gt 1500 ] || warn "less than 1.5 GB free on / ($free_mb MB)"
 
 # ------------------------------------------------------------------ clean
-if [ "$SKIP_CLEAN" != 1 ]; then
+if [ "$CLEAN" = 1 ]; then
   log "== Phase 0: clean to 'as after fresh install'"
   # 0.1 purge heavy/foreign DE + apps
   if installed gnome-shell || installed plasma-desktop || installed cinnamon || installed xfce4-session || installed mate-desktop-environment; then
     log "purging other desktop environments..."
-    if confirm "Purge other DEs/apps (GNOME/KDE/Cinnamon/Mate/Xfce, browsers, office)?"; then
-      mapfile -t to_purge < <(dpkg -l | awk '/^ii/{print $2}' | grep -E '^(gnome|kde|kde5|kde6|cinnamon|mate|xfce|xfce4|nautilus|nemo|caja|gedit|totem|evolution|rhythmbox|cheese|shotwell|thunderbird|firefox|firefox-esr|libreoffice)' || true)
-      if [ "${#to_purge[@]}" -gt 0 ]; then
-        log "purging: ${to_purge[*]}"
-        run apt-get remove --purge -y "${to_purge[@]}" || true
-        run apt-get autoremove --purge -y || true
-      fi
+    mapfile -t to_purge < <(dpkg -l | awk '/^ii/{print $2}' | grep -E '^(gnome|kde|kde5|kde6|cinnamon|mate|xfce|xfce4|nautilus|nemo|caja|gedit|totem|evolution|rhythmbox|cheese|shotwell|thunderbird|firefox|firefox-esr|libreoffice)' || true)
+    if [ "${#to_purge[@]}" -gt 0 ]; then
+      log "purging: ${to_purge[*]}"
+      run apt-get remove --purge -y "${to_purge[@]}" || true
+      run apt-get autoremove --purge -y || true
     fi
   else
     log "no heavy DE found, nothing to purge"
@@ -94,12 +151,10 @@ if [ "$SKIP_CLEAN" != 1 ]; then
   # 0.2 other users -> remove (keep root, keep cnc)
   mapfile -t others < <(awk -F: '$3>=1000 && $1!="nobody" {print $1}' /etc/passwd | grep -v '^cnc$' || true)
   if [ "${#others[@]}" -gt 0 ]; then
-    log "non-root users found: ${others[*]}"
-    if confirm "Remove these users and their /home? (cnc is kept): ${others[*]}"; then
-      for u in "${others[@]}"; do
-        run userdel -r "$u" 2>/dev/null || run userdel "$u" 2>/dev/null || warn "could not remove $u"
-      done
-    fi
+    log "removing non-root users: ${others[*]}"
+    for u in "${others[@]}"; do
+      run userdel -r "$u" 2>/dev/null || run userdel "$u" 2>/dev/null || warn "could not remove $u"
+    done
   fi
 
   # 0.3 reset /etc/skel
@@ -133,7 +188,7 @@ run bash -c "echo 'cnc:cnc' | chpasswd"
 run usermod -aG sudo,dialout,plugdev,video,input,audio cnc
 
 # if the home dir exists but was never provisioned, clean it
-if [ "$SKIP_CLEAN" != 1 ] && [ -d /home/cnc ] && [ ! -f /home/cnc/.provisioned ]; then
+if [ "$CLEAN" = 1 ] && [ -d /home/cnc ] && [ ! -f /home/cnc/.provisioned ]; then
   log "cleaning existing /home/cnc for a fresh start"
   run rm -rf /home/cnc
   run mkdir -p /home/cnc
@@ -180,22 +235,18 @@ log "== Phase 5: ensure RT kernel + grub default"
 if installed linux-image-rt-amd64; then
   run update-grub 2>/dev/null || true
   rt_entry=$(grep -oP "(?<=menuentry ')[^']*-rt-[^']*(?=')" /boot/grub/grub.cfg | head -1 || true)
-  if [ -n "$rt_entry" ]; then
+  if [ -n "$rt_entry" ] && [ "$RT_DEFAULT" = 1 ]; then
     log "RT kernel menuentry: $rt_entry"
-    if confirm "Set $rt_entry as default boot entry?"; then
-      run bash -c "sed -i 's/^GRUB_DEFAULT=.*/GRUB_DEFAULT=\"Advanced options for Debian GNU/Linux>$rt_entry\"/' /etc/default/grub"
-      run update-grub 2>/dev/null || true
-    fi
+    run bash -c "sed -i 's/^GRUB_DEFAULT=.*/GRUB_DEFAULT=\"Advanced options for Debian GNU/Linux>$rt_entry\"/' /etc/default/grub"
+    run update-grub 2>/dev/null || true
+  elif [ -n "$rt_entry" ]; then
+    log "RT kernel installed, default boot entry left unchanged ($rt_entry)"
   else
     warn "no -rt- menuentry found in grub.cfg"
   fi
 else
   warn "linux-image-rt-amd64 is not installed — check Phase 1 log"
 fi
-
-# ------------------------------------------------------------- linuxcnc boot
-log "== Phase 6: linuxcnc autostart on login (launch-linuxcnc.sh handles absence of config)"
-# (handled by openbox/autostart + bin/launch-linuxcnc.sh from dotfiles)
 
 # ---------------------------------------------------------------- report
 log ""
@@ -213,7 +264,9 @@ log "    enter the machine pinout (machines/ra0306/linuxcnc-ra0306-guide.md §7)
 log " 3. After that, LinuxCNC starts automatically at login."
 log "    SUPER+Q terminal | SUPER+E files | SUPER+L linuxcnc | SUPER+C close"
 
-if [ "$DO_REBOOT" = 1 ] && [ "$DRY_RUN" = 0 ]; then
+echo ""
+echo "  Готово. Войди как cnc / cnc."
+if [ "$REBOOT_AFTER" = 1 ] && [ "$DRY_RUN" = 0 ]; then
   log "rebooting in 5 seconds..."
   sleep 5
   reboot

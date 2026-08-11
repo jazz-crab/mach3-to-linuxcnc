@@ -240,12 +240,19 @@ echo 'blacklist lp' | sudo tee /etc/modprobe.d/blacklist-lp.conf
 # при необходимости перезагрузка
 ```
 
-Права: LinuxCNC/uspace обычно ходит в порт через RTAPI; если будут ошибки доступа — добавь пользователя в группы:
+Права: `/dev/parport0` в Debian по умолчанию принадлежит группе `lp` — группе `dialout`/`plugdev` этого мало. Дай доступ (если офлайн-скрипт уже делал это — правило уже лежит в `/etc/udev/rules.d/99-linuxcnc-parport.rules`):
 
 ```bash
+echo 'KERNEL=="parport*", SUBSYSTEM=="ppdev", MODE="0660", GROUP="dialout"' \
+  | sudo tee /etc/udev/rules.d/99-linuxcnc-parport.rules
+sudo udevadm control --reload-rules && sudo udevadm trigger
 sudo usermod -aG dialout,plugdev "$USER"
 # перелогинься
 ```
+
+> Если запускаешь офлайн-скрипт `setup-machine.sh` — делай это **из консоли**
+> (Ctrl+Alt+F3, логин под старым пользователем + sudo), а не из графической
+> сессии: иначе удаление «чужого» пользователя и его сессии может не пройти.
 
 ## 6.4. Latency test (обязательно)
 

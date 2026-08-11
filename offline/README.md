@@ -46,6 +46,9 @@ dotfiles/
 
 ## Шаг 3. На станке
 
+Запускай **из консоли** (Ctrl+Alt+F3 → логин старым пользователем → `sudo`),
+не из графической сессии — чистка удаляет «чужих» пользователей и их сессии.
+
 ```bash
 sudo bash setup-machine.sh
 ```
@@ -73,7 +76,7 @@ sudo bash setup-machine.sh
 2. **Чистка «как после установки»**: сносит чужие DE (GNOME/KDE/Xfce…),
    другие non-root пользователи (кроме `cnc`), чистит `/etc/skel`.
 3. Установка пакетов из `debs/` офлайн.
-4. Blacklist модуля `lp` (чтобы не мешал параллельному порту).
+4. LPT: blacklist модуля `lp` + udev-правило `/dev/parport0` для группы `dialout`.
 5. Пользователь `cnc` / пароль `cnc`, группы `sudo,dialout,plugdev,video,input,audio`.
 6. dotfiles: openbox (клавиши, автозапуск), lightdm (запрос логина),
    Thunar (пункты ПКМ), хелперы в `~/bin`.

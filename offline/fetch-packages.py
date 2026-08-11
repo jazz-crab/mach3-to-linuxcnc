@@ -39,7 +39,7 @@ DEFAULT_SEEDS = [
     "thunar",
     "gvfs-backends",
     "udisks2",
-    "policykit-1",
+    "polkitd",
     "neovim",
     "libnotify-bin",
     "xinit",

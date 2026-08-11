@@ -75,6 +75,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEBS="$SCRIPT_DIR/debs"
 DOTFILES="$SCRIPT_DIR/dotfiles"
 [ -d "$DEBS" ] || die "no debs/ next to this script (run fetch-packages.py first)"
+deb_count=$(ls "$DEBS"/*.deb 2>/dev/null | wc -l || true)
+[ "$deb_count" -gt 0 ] || die "debs/ is empty — run fetch-packages.py to download the packages first"
 [ -d "$DOTFILES" ] || warn "no dotfiles/ found — desktop keybinds/autostart will not be installed"
 
 # ------------------------------------------------------------- interactive
@@ -138,7 +140,7 @@ if [ "$CLEAN" = 1 ]; then
   # 0.1 purge heavy/foreign DE + apps
   if installed gnome-shell || installed plasma-desktop || installed cinnamon || installed xfce4-session || installed mate-desktop-environment; then
     log "purging other desktop environments..."
-    mapfile -t to_purge < <(dpkg -l | awk '/^ii/{print $2}' | grep -E '^(gnome|kde|kde5|kde6|cinnamon|mate|xfce|xfce4|nautilus|nemo|caja|gedit|totem|evolution|rhythmbox|cheese|shotwell|thunderbird|firefox|firefox-esr|libreoffice)' || true)
+    mapfile -t to_purge < <(dpkg -l | awk '/^ii/{print $2}' | grep -E '^(gdm|gdm3|gnome|sddm|kdm|kde|kde5|kde6|cinnamon|mate|xfce|xfce4|nautilus|nemo|caja|gedit|totem|evolution|rhythmbox|cheese|shotwell|thunderbird|firefox|firefox-esr|libreoffice)' || true)
     if [ "${#to_purge[@]}" -gt 0 ]; then
       log "purging: ${to_purge[*]}"
       run apt-get remove --purge -y "${to_purge[@]}" || true
@@ -153,6 +155,7 @@ if [ "$CLEAN" = 1 ]; then
   if [ "${#others[@]}" -gt 0 ]; then
     log "removing non-root users: ${others[*]}"
     for u in "${others[@]}"; do
+      run loginctl terminate-user "$u" 2>/dev/null || true
       run userdel -r "$u" 2>/dev/null || run userdel "$u" 2>/dev/null || warn "could not remove $u"
     done
   fi
@@ -176,6 +179,10 @@ fi
 # ------------------------------------------------------------- parallel port
 log "== Phase 2: free the parallel port for LinuxCNC"
 run bash -c "echo 'blacklist lp' > /etc/modprobe.d/blacklist-lp.conf"
+# /dev/parport0 is root:lp by default on Debian — give it to the dialout group
+run bash -c "echo 'KERNEL==\"parport*\", SUBSYSTEM==\"ppdev\", MODE=\"0660\", GROUP=\"dialout\"' > /etc/udev/rules.d/99-linuxcnc-parport.rules"
+run udevadm control --reload-rules 2>/dev/null || true
+run udevadm trigger 2>/dev/null || true
 
 # ------------------------------------------------------------- linuxcnc dir
 log "== Phase 3: user cnc"
@@ -224,6 +231,7 @@ if [ -d "$DOTFILES" ]; then
   if [ -f "$DOTFILES/lightdm/01-cnc.conf" ]; then
     run install -m 0644 "$DOTFILES/lightdm/01-cnc.conf" /etc/lightdm/lightdm.conf.d/01-cnc.conf
   fi
+  run systemctl disable gdm3 gdm sddm kdm 2>/dev/null || true
   run systemctl enable lightdm 2>/dev/null || true
 fi
 

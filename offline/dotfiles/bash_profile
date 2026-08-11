@@ -1,0 +1,6 @@
+# ~/.bash_profile
+if [ -f "$HOME/.bashrc" ]; then . "$HOME/.bashrc"; fi
+# запуск графической сессии, если входим с консоли (fallback без lightdm)
+if [ -z "$DISPLAY" ] && [ -z "$SSH_CONNECTION" ] && [ "$(tty)" = /dev/tty1 ]; then
+  exec startx
+fi

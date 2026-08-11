@@ -1,0 +1,30 @@
+<openbox_pipe_menu xmlns="http://openbox.org/3.4/menu">
+  <menu id="root-menu" label="Меню">
+    <item label="LinuxCNC">
+      <action name="Execute"><command>/home/cnc/bin/launch-linuxcnc.sh</command></action>
+    </item>
+    <item label="StepConf (настройка)">
+      <action name="Execute"><command>stepconf</command></action>
+    </item>
+    <item label="Файлы (Thunar)">
+      <action name="Execute"><command>thunar</command></action>
+    </item>
+    <item label="Терминал">
+      <action name="Execute"><command>alacritty</command></action>
+    </item>
+    <separator/>
+    <item label="Перезапустить openbox">
+      <action name="Reconfigure"/>
+    </item>
+    <item label="Заблокировать экран">
+      <action name="Execute"><command>openbox --exit</command></action>
+    </item>
+    <separator/>
+    <item label="Перезагрузка">
+      <action name="Execute"><command>systemctl reboot</command></action>
+    </item>
+    <item label="Выключение">
+      <action name="Execute"><command>systemctl poweroff</command></action>
+    </item>
+  </menu>
+</openbox_pipe_menu>

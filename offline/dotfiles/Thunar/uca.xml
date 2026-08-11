@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<actions>
+  <action>
+    <icon>folder-sync</icon>
+    <name>Копировать в linuxcnc/projects</name>
+    <submenu></submenu>
+    <unique-id>to-linuxcnc</unique-id>
+    <command>/home/cnc/bin/to-linuxcnc.sh %F</command>
+    <description>Скопировать выбранные файлы в папку linuxcnc/projects (G-code)</description>
+    <patterns>*</patterns>
+    <directories>true</directories>
+    <audio-files>false</audio-files>
+    <image-files>false</image-files>
+    <other-files>true</other-files>
+    <text-files>true</text-files>
+    <video-files>false</video-files>
+  </action>
+  <action>
+    <icon>drive-removable-media</icon>
+    <name>Копировать на флешку</name>
+    <submenu></submenu>
+    <unique-id>to-usb</unique-id>
+    <command>/home/cnc/bin/usb-copy.sh %F</command>
+    <description>Скопировать выбранные файлы на подключённую USB-флешку</description>
+    <patterns>*</patterns>
+    <directories>true</directories>
+    <audio-files>false</audio-files>
+    <image-files>false</image-files>
+    <other-files>true</other-files>
+    <text-files>true</text-files>
+    <video-files>false</video-files>
+  </action>
+</actions>

@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# fallback startx session (used if lightdm is not available)
+exec openbox-session

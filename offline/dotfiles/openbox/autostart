@@ -1,0 +1,10 @@
+# openbox autostart — runs after login (cnc / cnc)
+# Launch LinuxCNC automatically; the launcher picks an existing config
+# or opens the config chooser, and stays out of the way during setup.
+if [ -x "$HOME/bin/launch-linuxcnc.sh" ]; then
+  "$HOME/bin/launch-linuxcnc.sh" &
+fi
+
+# keep the terminal handy on desktop 1
+# (optional: pre-start alacritty — commented out to keep RAM free)
+# alacritty &

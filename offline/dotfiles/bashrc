@@ -1,0 +1,15 @@
+# ~/.bashrc — машина станка (RA0306 + LinuxCNC)
+if [ -f /etc/bashrc ]; then . /etc/bashrc; fi
+if [ -f /etc/bash.bashrc ]; then . /etc/bash.bashrc; fi
+
+# удобства
+alias ls='ls --color=auto'
+alias ll='ls -l'
+alias la='ls -a'
+alias df='df -h'
+alias du='du -h'
+alias ip='ip -color=auto'
+alias xsel='xsel --clipboard'
+set -o vi 2>/dev/null || true
+
+export PATH="$HOME/bin:$PATH"
